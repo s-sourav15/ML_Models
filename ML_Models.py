@@ -3,8 +3,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.datasets import make_moons, load_iris, make_regression
 from sklearn.metrics import accuracy_score, r2_score, mean_squared_error
+from sklearn.tree import DecisionTreeClassifier
 from collections import Counter
-# import pandas as pd
+import pandas as pd
+import matplotlib.pyplot as plt
 np.random.seed(42)
 
 def featureScaling(X, scaling = 'standard'):
@@ -72,53 +74,52 @@ class linearRegression:
 
 
 class logisticRegression:
-    def __init__(self, lr = 0.001, n_iters = 1000, regularization = 'l1', lambdaP = 0.1, batchSize = 32):
+    def __init__(self, lr=0.01, lambdaP = 0.001, iters = 1000, batch_size = 32, regularization = 'l1'):
+        self.regul = regularization
+        self.batch_size = batch_size
+        self.iters = iters
         self.lr = lr
-        self.regularization = regularization
-        self.n_iters = n_iters
         self.lambdaP = lambdaP
-        self.weights = None
-        self.bias = None
-        self.batch_size = batchSize
-
+    
     def fit(self, X, y):
         samples, features = X.shape
-        nBatches = samples // self.batch_size
+
         self.weights = np.zeros(features)
         self.bias = 0
-        epochLosses = []
-        for epoch in range(self.n_iters):
-
-            for batch in range(nBatches):
-                idx = np.random.choice(samples, size=self.batch_size, replace=True)
+        batches = samples // self.batch_size
+        epoch_losses = []
+        for epoch in range(self.iters):
+            for _ in range(batches):
+                idx = np.random.choice(samples, size=self.batch_size, replace=False)
                 batch_X = X[idx]
                 batch_y = y[idx]
+
                 z = np.dot(batch_X, self.weights) + self.bias
                 preds = self._sigmoid(z)
-                if self.regularization =='l1':
-                    cost = (-1 /samples) * np.sum((batch_y) * np.log(preds) + (1 - batch_y) * np.log(1 - preds)) + self.lambdaP * self.weights
-                    self.weights -= (self.lr / samples) * (np.dot((preds - batch_y), batch_X)) + self.lambdaP * np.sign(np.mean(self.weights))
+                if self.regul == 'l1':
+                    cost = (-1 / samples) * np.sum(batch_y * np.log(preds) + (1- batch_y) *( np.log(1- preds))) + self.lambdaP * self.weights
+                    self.weights -= (self.lr /samples) * (np.dot(preds - batch_y, batch_X)) + self.lambdaP * np.sign(np.mean(self.weights))
                 else:
-                    cost = (-1 /samples) * np.sum((batch_y) * np.log(preds) + (1 - batch_y) * np.log(1 - preds)) + self.lambdaP * (self.weights ** 2)
-                    self.weights -= (self.lr / samples) * (np.dot((preds - batch_y), batch_X)) + self.lambdaP * np.mean(self.weights) 
+                    cost = (-1 / samples) * np.sum(batch_y * np.log(preds) + (1- batch_y)*( np.log(1- preds))) + self.lambdaP * (self.weights ** 2)
+                    self.weights -= (self.lr / samples) * np.dot(preds - batch_y, batch_X) + self.lambdaP * np.mean(self.weights)
                 self.bias -= (1 / samples) * np.sum(preds - batch_y)
-                epochLosses.append(cost)
+                epoch_losses.append(cost)
             if epoch % 100 == 0:
-                print(f'loss for epoch {epoch} || {np.mean(epochLosses)}')
-
+                print(np.mean(epoch_losses))
     def predict(self, X):
         z = np.dot(X, self.weights) + self.bias
-        return np.round(self._sigmoid(z)).astype(int)
-
+        preds = self._sigmoid(z)
+        return np.round(preds).astype(int)
+                        
     def _sigmoid(self, z):
         return 1 / (1 + np.exp(-z))
 
-# model = logisticRegression(regularization='l2')
-# sc = StandardScaler()
-# X, y = make_moons(n_samples=1000)
-# xTrain, xTest, yTrain, yTest = train_test_split(X, y, train_size=0.8)
-# xTrain = sc.fit_transform(xTrain)
-# xTest = sc.transform(xTest)
+model = logisticRegression(regularization='l2')
+sc = StandardScaler()
+X, y = make_moons(n_samples=1000)
+xTrain, xTest, yTrain, yTest = train_test_split(X, y, train_size=0.8)
+xTrain = sc.fit_transform(xTrain)
+xTest = sc.transform(xTest)
 
 # model.fit(xTrain, yTrain)
 # preds = model.predict(xTest)
@@ -158,36 +159,161 @@ class KNN:
 # print(df[:20])
 
 class KMeans:
-    def __init__(self, k, n_iters = 1000, tol = 1e-4):
-        self.k = k
-        self.n_iters = n_iters
+    def __init__(self, k, iters =200, tol = 1e-4):
+        self.k =k
         self.tol = tol
-    
+        self.iters = iters
+
     def fit(self, X):
-        self.centroids = X[np.random.choice(len(X), self.k, replace = False)]
+        self.centroids = X[np.random.choice(len(X), size=self.k, replace=False)]
 
-        for i in range(self.n_iters):
-
+        for iter in range(self.iters):
             cluster_assignments = []
+
             for x in X:
                 dist = np.linalg.norm(x - self.centroids, axis = 1)
                 cluster_assignments.append(np.argmin(dist))
-            
-            for j in range(self.k):
-                cluster_data_points = X[np.where(np.array(cluster_assignments) == j)]
 
-                if len(cluster_data_points) > 0:
-                    self.centroids[j] = np.mean(cluster_data_points, axis = 0)
-                
-            if i > 0 and np.equal(self.centroids, previousCentroids):
+            for k in range(self.k):
+                cluster_points = X[np.where(np.array(cluster_assignments) == k)]
+                if len(cluster_points) > 0:
+                    self.centroids[k] = np.mean(cluster_points, axis = 0)
+
+            if iter > 0 and np.mean(self.centroids - previous) < self.tol:
                 break
+                
+            previous = np.copy(self.centroids)
 
-            previousCentroids = np.copy(self.centroids)
-        
+
     def predict(self, X):
         cluster_assignments = []
         for x in X:
-            dist = np.linalg.norm(x - self.centorids, axis = 1)
-            cluster_assignments.append(np.argmin(dist)
-                                       )
-                                       
+            dist = np.linalg.norm(x - self.centroids, axis = 1)
+            cluster_assignments.append(np.argmin(dist))
+        return cluster_assignments
+    
+kmeans = KMeans(k = 2)
+x1 = np.random.randn(15, 2) + 5
+x2 = np.random.randn(15, 2) - 5
+X = np.concatenate([x1, x2], axis =0)
+# kmeans.fit(X)
+# print(kmeans.predict(X))
+
+
+class bagging:
+    def __init__(self, estimators, baseEstimator, replace =False):
+        self.estimators = estimators
+        self.baseEstimator = baseEstimator
+        self.replace = replace
+        self.models = []
+    def fit(self, X, y):
+        subsamples = self.subsample(X)
+        for i in range(self.estimators):
+            idx = subsamples[i]
+            batch_X = X[idx]
+            batch_y = y[idx]
+            self.baseEstimator.fit(batch_X, batch_y)
+            self.models.append(self.baseEstimator)
+        
+    def predict(self, X):
+        predictions = []
+        for est in self.models:
+            preds = est.predict(X)
+            predictions.append(preds)
+        
+        return np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=predictions)
+    
+    def subsample(self, X):
+        m, n = X. shape
+        size = m if self.replace else m // 2
+        return [np.random.choice(len(X), size=size, replace=self.replace) for _ in range(self.estimators)]
+
+    
+sc = StandardScaler()
+X, y = load_iris()['data'], load_iris()['target']
+xTrain, xTest, yTrain, yTest = train_test_split(X, y, train_size=0.8)
+xTrain = sc.fit_transform(xTrain)
+xTest = sc.transform(xTest)
+model = bagging(estimators=10, baseEstimator=DecisionTreeClassifier())
+# model.fit(xTrain, yTrain)
+
+# preds = model.predict(xTest)
+# # preds = model.fit(xTest)
+# print(accuracy_score(yTest, preds))
+
+
+class PCA:
+    def __init__(self, k):
+        self.k = k
+        self.eigenvalues= None
+        self.eigenvectors = None
+    
+    def fit(self, X):
+        X_centered = X - np.mean(X, axis = 0)
+
+        self.covariance = np.cov(X_centered.T)
+
+        eigenvalues, eigenvectors = np.linalg.eig(self.covariance)
+        idx = np.argsort(eigenvalues)[::-1]
+        self.eigenvalues = eigenvalues[idx]
+        self.eigenvectors = eigenvectors[:, idx]
+
+        self.eigenvalues = self.eigenvalues[:self.k]
+        self.eigenvectors = self.eigenvectors[:, :self.k]
+        totalVar = np.sum(eigenvalues)
+        self.cumulative_variance = self.eigenvalues / totalVar
+        return np.dot(X_centered, self.eigenvectors)
+
+def verify_eigenvectors(
+    cov_matrix: np.ndarray,
+    eigenvalues: np.ndarray,
+    eigenvectors: np.ndarray,
+    tolerance: float = 1e-10
+) -> bool:
+    """
+    Verify that eigenvectors and eigenvalues are correct
+    
+    Av = λv where A is covariance matrix, v is eigenvector, λ is eigenvalue
+    """
+    for i in range(len(eigenvalues)):
+        # Compute Av
+        Av = np.dot(cov_matrix, eigenvectors[:, i])
+        # Compute λv
+        lv = eigenvalues[i] * eigenvectors[:, i]
+        # Check if they're equal
+        if not np.allclose(Av, lv, rtol=tolerance):
+            return False
+    return True
+
+data = load_iris()
+X = data['data']
+y = data['target']
+sc = StandardScaler()
+X = sc.fit_transform(X)
+print(X.shape)
+pca = PCA(k = 2)
+X_proj = pca.fit(X)
+print(X_proj.shape)
+# verify_eigenvectors(pca.covariance, pca.eigenValues, pca.eigenVectors)
+        
+print("\nExplained Variance Ratios:")
+for i, ratio in enumerate(pca.cumulative_variance):
+    print(f"Component {i+1}: {ratio:.4f}")
+    
+# Visualize transformation
+plt.figure(figsize=(12, 5))
+
+plt.subplot(121)
+plt.scatter(X[:, 0], X[:, 1], alpha=0.5)
+plt.title('Original Data (First 2 Dimensions)')
+plt.xlabel('X')
+plt.ylabel('Y')
+
+plt.subplot(122)
+plt.scatter(X_proj[:, 0], X_proj[:, 1], alpha=0.5)
+plt.title('PCA Transformed Data')
+plt.xlabel('First Principal Component')
+plt.ylabel('Second Principal Component')
+
+plt.tight_layout()
+plt.show()
