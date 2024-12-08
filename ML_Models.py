@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.datasets import make_moons, load_iris, make_regression
 from sklearn.metrics import accuracy_score, r2_score, mean_squared_error
 from collections import Counter
-import pandas as pd
+# import pandas as pd
 np.random.seed(42)
 
 def featureScaling(X, scaling = 'standard'):
